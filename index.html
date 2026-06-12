@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Enqueue 智能派單系統</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+            font-size: 32px;
+            color: #f8fafc;
+        }
+
+        .subtitle {
+            margin-bottom: 24px;
+            color: #94a3b8;
+        }
+
+        .control-panel {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        #startBtn {
+            background: #22c55e;
+            color: #052e16;
+        }
+
+        #resetBtn {
+            background: #f97316;
+            color: #431407;
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+        }
+
+        .card-title {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #f8fafc;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .factory {
+            background: #111827;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .factory h2 {
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+
+        .queue {
+            min-height: 130px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border: 2px dashed #475569;
+            border-radius: 12px;
+            background: #020617;
+        }
+
+        .unit {
+            min-width: 90px;
+            padding: 14px 10px;
+            border-radius: 10px;
+            text-align: center;
+            background: #2563eb;
+            color: #eff6ff;
+            font-weight: 800;
+            animation: pop 0.25s ease-out;
+        }
+
+        .empty-slot {
+            min-width: 90px;
+            padding: 14px 10px;
+            border-radius: 10px;
+            text-align: center;
+            color: #64748b;
+            border: 1px dashed #475569;
+        }
+
+        .queue-info {
+            margin-top: 12px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .log-panel {
+            margin-top: 24px;
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 20px;
+            height: 320px;
+            overflow-y: auto;
+        }
+
+        .log-panel h2 {
+            margin-top: 0;
+        }
+
+        .log-line {
+            font-family: Consolas, monospace;
+            font-size: 15px;
+            line-height: 1.8;
+            color: #d1d5db;
+        }
+
+        .success {
+            color: #86efac;
+        }
+
+        .warning {
+            color: #facc15;
+        }
+
+        .danger {
+            color: #fca5a5;
+        }
+
+        .info {
+            color: #93c5fd;
+        }
+
+        @keyframes pop {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 800px) {
+            .dashboard,
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .queue {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Smart Enqueue 智能派單系統</h1>
+        <p class="subtitle">
+            模擬雙兵營 Queue、生產出列、空單推進、黃金檢查、Overflow 與 Underflow 防護。
+        </p>
+
+        <div class="control-panel">
+            <button id="startBtn">開始</button>
+            <button id="resetBtn">重置</button>
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <div class="card-title">目前回合</div>
+                <div class="card-value" id="roundDisplay">0</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">玩家黃金</div>
+                <div class="card-value" id="goldDisplay">200</div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">目前訂單</div>
+                <div class="card-value" id="orderDisplay">尚未開始</div>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <div class="factory">
+                <h2>A 廠</h2>
+                <div class="queue" id="queueA"></div>
+                <div class="queue-info" id="queueAInfo">容量：0 / 2</div>
+            </div>
+
+            <div class="factory">
+                <h2>B 廠</h2>
+                <div class="queue" id="queueB"></div>
+                <div class="queue-info" id="queueBInfo">容量：0 / 2</div>
+            </div>
+        </div>
+
+        <div class="log-panel" id="logPanel">
+            <h2>系統紀錄</h2>
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <script>
+        const MAX_QUEUE_SIZE = 2;
+
+        const originalOrders = [
+            { name: "劍士", cost: 70 },
+            { name: "弓手", cost: 30 },
+            { name: "騎士", cost: 50 },
+            {},
+            {},
+            {},
+            {},
+            { name: "法師", cost: 80 },
+            { name: "槍兵", cost: 40 },
+            { name: "巨人", cost: 999 }
+        ];
+
+        let orders = [];
+        let playerGold = 200;
+        let currentRound = 0;
+        let queueA = [];
+        let queueB = [];
+        let timer = null;
+        let isRunning = false;
+
+        const startBtn = document.getElementById("startBtn");
+        const resetBtn = document.getElementById("resetBtn");
+
+        const roundDisplay = document.getElementById("roundDisplay");
+        const goldDisplay = document.getElementById("goldDisplay");
+        const orderDisplay = document.getElementById("orderDisplay");
+
+        const queueAElement = document.getElementById("queueA");
+        const queueBElement = document.getElementById("queueB");
+        const queueAInfo = document.getElementById("queueAInfo");
+        const queueBInfo = document.getElementById("queueBInfo");
+
+        const logs = document.getElementById("logs");
+        const logPanel = document.getElementById("logPanel");
+
+        function init() {
+            orders = [...originalOrders];
+            playerGold = 200;
+            currentRound = 0;
+            queueA = [];
+            queueB = [];
+            isRunning = false;
+
+            clearInterval(timer);
+            timer = null;
+
+            startBtn.disabled = false;
+
+            logs.innerHTML = "";
+            orderDisplay.textContent = "尚未開始";
+
+            render();
+        }
+
+        function addLog(message, type = "") {
+            const line = document.createElement("div");
+            line.className = `log-line ${type}`;
+            line.textContent = message;
+            logs.appendChild(line);
+
+            logPanel.scrollTop = logPanel.scrollHeight;
+        }
+
+        function renderQueue(queue, element) {
+            element.innerHTML = "";
+
+            for (const unit of queue) {
+                const unitElement = document.createElement("div");
+                unitElement.className = "unit";
+                unitElement.textContent = unit;
+                element.appendChild(unitElement);
+            }
+
+            for (let i = queue.length; i < MAX_QUEUE_SIZE; i++) {
+                const emptyElement = document.createElement("div");
+                emptyElement.className = "empty-slot";
+                emptyElement.textContent = "空位";
+                element.appendChild(emptyElement);
+            }
+        }
+
+        function render() {
+            roundDisplay.textContent = currentRound;
+            goldDisplay.textContent = playerGold;
+
+            renderQueue(queueA, queueAElement);
+            renderQueue(queueB, queueBElement);
+
+            queueAInfo.textContent = `容量：${queueA.length} / ${MAX_QUEUE_SIZE}`;
+            queueBInfo.textContent = `容量：${queueB.length} / ${MAX_QUEUE_SIZE}`;
+        }
+
+        function dequeueFactory(factoryName, queue) {
+            if (queue.length > 0) {
+                const unit = queue.shift();
+                addLog(`${factoryName} 廠生產完成：${unit} 出列！`, "success");
+            } else {
+                addLog(`${factoryName} 廠沒東西可做 (Underflow 防護成功)`, "warning");
+            }
+        }
+
+        function handleOrder(order) {
+            if (Object.keys(order).length === 0) {
+                orderDisplay.textContent = "空單";
+                addLog("玩家本回合無動作，單純推進時間", "info");
+                return;
+            }
+
+            const unitName = order.name;
+            const cost = order.cost;
+
+            orderDisplay.textContent = `${unitName} / ${cost} 金`;
+
+            if (playerGold < cost) {
+                addLog(`黃金不足，無法生產 ${unitName}`, "danger");
+                return;
+            }
+
+            if (queueA.length >= MAX_QUEUE_SIZE && queueB.length >= MAX_QUEUE_SIZE) {
+                addLog(`產線全滿！${unitName} 訂單拒絕`, "danger");
+                return;
+            }
+
+            if (queueA.length <= queueB.length) {
+                if (queueA.length < MAX_QUEUE_SIZE) {
+                    queueA.push(unitName);
+                    playerGold -= cost;
+                    addLog(`${unitName} 分派至 A 廠 (剩餘黃金: ${playerGold})`, "success");
+                } else {
+                    queueB.push(unitName);
+                    playerGold -= cost;
+                    addLog(`${unitName} 分派至 B 廠 (剩餘黃金: ${playerGold})`, "success");
+                }
+            } else {
+                if (queueB.length < MAX_QUEUE_SIZE) {
+                    queueB.push(unitName);
+                    playerGold -= cost;
+                    addLog(`${unitName} 分派至 B 廠 (剩餘黃金: ${playerGold})`, "success");
+                } else {
+                    queueA.push(unitName);
+                    playerGold -= cost;
+                    addLog(`${unitName} 分派至 A 廠 (剩餘黃金: ${playerGold})`, "success");
+                }
+            }
+        }
+
+        function runOneRound() {
+            if (currentRound >= orders.length) {
+                addLog("所有訂單已處理完畢，系統停止。", "info");
+                clearInterval(timer);
+                timer = null;
+                isRunning = false;
+                startBtn.disabled = false;
+                return;
+            }
+
+            const order = orders[currentRound];
+
+            addLog("");
+            addLog(`--- 第 ${currentRound} 回合 ---`, "info");
+
+            if (currentRound % 2 === 0) {
+                dequeueFactory("A", queueA);
+                dequeueFactory("B", queueB);
+            }
+
+            handleOrder(order);
+
+            addLog(`A: [${queueA.map(item => `'${item}'`).join(", ")}] | B: [${queueB.map(item => `'${item}'`).join(", ")}]`);
+
+            currentRound++;
+            render();
+        }
+
+        startBtn.addEventListener("click", () => {
+            if (isRunning) return;
+
+            isRunning = true;
+            startBtn.disabled = true;
+
+            runOneRound();
+
+            timer = setInterval(() => {
+                runOneRound();
+            }, 1000);
+        });
+
+        resetBtn.addEventListener("click", () => {
+            init();
+        });
+
+        init();
+    </script>
+</body>
+</html>
